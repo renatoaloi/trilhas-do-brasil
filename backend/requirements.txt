@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+pyjwt
+bcrypt
+python-dotenv
+pydantic
+email-validator
+aiosqlite
+greenlet
+python-multipart
+slowapi
