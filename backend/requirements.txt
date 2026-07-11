@@ -8,6 +8,7 @@ python-dotenv
 pydantic
 email-validator
 aiosqlite
+psycopg2-binary
 greenlet
 python-multipart
 slowapi
