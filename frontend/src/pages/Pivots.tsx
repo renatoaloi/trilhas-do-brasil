@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api, fileUrl } from '../services/api'
 import type { Pivot } from '../services/types'
 import { Modal } from '../components/Modal'
@@ -9,6 +10,7 @@ import { useAuth } from '../hooks/useAuth'
 
 export function Pivots() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [items, setItems] = useState<Pivot[]>([])
   const [q, setQ] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -122,6 +124,13 @@ export function Pivots() {
                   onClick={() => setSelected(p)}
                 >
                   Detalhes
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-signal-500/40 text-signal-300 px-3 py-1.5 text-sm"
+                  onClick={() => navigate('/dashboard', { state: { center: { lat: p.latitude, lng: p.longitude } } })}
+                >
+                  Ver no Mapa
                 </button>
                 {user?.id === p.user_id ? (
                   <button
