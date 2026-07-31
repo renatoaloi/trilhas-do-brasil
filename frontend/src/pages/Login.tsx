@@ -1,86 +1,78 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import Modal from '../components/Modal'
+import { Modal } from '../components/Modal'
 
-export default function Login() {
+export function Login() {
   const { login } = useAuth()
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [showError, setShowError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault()
-    setError('')
     setLoading(true)
+    setError(null)
     try {
       await login(email, password)
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { detail?: string } } }
-        setError(axiosErr.response?.data?.detail || 'Email ou senha inválidos.')
-      } else {
-        setError('Erro ao fazer login.')
-      }
-      setShowError(true)
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha no login')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-display font-bold text-safety-orange">Trilhas do Brasil</h1>
-          <p className="text-stone mt-2">Acesse sua conta</p>
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-3xl border border-forest-600/60 bg-forest-900/90 p-6 shadow-2xl">
+        <div className="mb-6 text-center">
+          <div className="text-xs uppercase tracking-[0.25em] text-moss-500">Aventura conectada</div>
+          <h1 className="mt-2 text-3xl font-bold text-signal-400">Trilhas do Brasil</h1>
+          <p className="mt-2 text-sm text-stone-400">Entre para explorar pinos, alertas e rotas</p>
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-stone mb-1">Email</label>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <label className="block text-sm">
+            Email
             <input
               type="email"
+              required
+              className="mt-1 w-full rounded-xl bg-forest-950 border border-forest-600 px-3 py-2.5"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-3 py-2.5 bg-dark-graphite border border-stone/30 rounded-lg text-white placeholder-stone/50 focus:outline-none focus:border-safety-orange transition-colors"
-              placeholder="seu@email.com"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-stone mb-1">Senha</label>
+          </label>
+          <label className="block text-sm">
+            Senha
             <input
               type="password"
+              required
+              minLength={6}
+              className="mt-1 w-full rounded-xl bg-forest-950 border border-forest-600 px-3 py-2.5"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-3 py-2.5 bg-dark-graphite border border-stone/30 rounded-lg text-white placeholder-stone/50 focus:outline-none focus:border-safety-orange transition-colors"
-              placeholder="Sua senha"
             />
-          </div>
-
+          </label>
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 bg-safety-orange hover:bg-safety-orange/80 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
+            className="w-full rounded-xl bg-signal-500 py-3 font-semibold text-forest-950 disabled:opacity-50"
           >
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
-
-        <p className="text-center text-stone text-sm mt-6">
-          Não tem conta?{' '}
-          <Link to="/register" className="text-safety-yellow hover:underline">Cadastre-se</Link>
+        <p className="mt-4 text-center text-sm text-stone-400">
+          Novo por aqui?{' '}
+          <Link to="/register" className="text-sand-400 hover:underline">
+            Criar conta
+          </Link>
         </p>
-
-        <Modal open={showError} title="Erro" onClose={() => setShowError(false)}>
-          <p className="text-stone">{error}</p>
-        </Modal>
       </div>
+      <Modal open={!!error} title="Erro" onClose={() => setError(null)}>
+        <p className="text-stone-200">{error}</p>
+      </Modal>
     </div>
   )
 }

@@ -1,111 +1,209 @@
-import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import L from 'leaflet'
-import { useAuth } from '../hooks/useAuth'
-import { trailService, type TrailResponse } from '../services/auth'
+import { useCallback, useEffect, useState } from 'react'
+import { MapView } from '../components/MapView'
+import { PivotDetail } from '../components/PivotDetail'
+import { Modal } from '../components/Modal'
+import { api } from '../services/api'
+import type { Pivot } from '../services/types'
+import { TIPOS_PINO } from '../services/types'
+import { formatNumber } from '../utils/format'
 
-const defaultIcon = L.icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-})
+export function Dashboard() {
+  const [pivots, setPivots] = useState<Pivot[]>([])
+  const [selected, setSelected] = useState<Pivot | null>(null)
+  const [tipo, setTipo] = useState('')
+  const [q, setQ] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [offlineOpen, setOfflineOpen] = useState(false)
+  const [centerLat, setCenterLat] = useState('')
+  const [centerLng, setCenterLng] = useState('')
+  const [raio, setRaio] = useState('10')
+  const [offlineResult, setOfflineResult] = useState<Pivot[] | null>(null)
+  const [busy, setBusy] = useState(false)
 
-L.Marker.prototype.options.icon = defaultIcon
-
-const trailIcon = L.divIcon({
-  className: '',
-  html: `<div style="background:#e85d26;width:20px;height:20px;border-radius:50%;border:3px solid #f0a500;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
-})
-
-const userIcon = L.divIcon({
-  className: '',
-  html: `<div style="background:#1a3c5e;width:16px;height:16px;border-radius:50%;border:3px solid #4a7c3f;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
-})
-
-const brazilCenter: [number, number] = [-14.235, -51.9253]
-
-function LocationMarker() {
-  const [position, setPosition] = useState<[number, number] | null>(null)
-  const map = useMap()
+  const load = useCallback(
+    async (bounds?: {
+      min_lat: number
+      max_lat: number
+      min_lng: number
+      max_lng: number
+    }) => {
+      try {
+        const params = new URLSearchParams()
+        if (q) params.set('q', q)
+        if (tipo) params.set('tipo', tipo)
+        if (bounds) {
+          params.set('min_lat', String(bounds.min_lat))
+          params.set('max_lat', String(bounds.max_lat))
+          params.set('min_lng', String(bounds.min_lng))
+          params.set('max_lng', String(bounds.max_lng))
+        }
+        const qs = params.toString()
+        const data = await api<Pivot[]>(`/pivots${qs ? `?${qs}` : ''}`)
+        setPivots(data)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Erro ao carregar pinos')
+      }
+    },
+    [q, tipo],
+  )
 
   useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const coord: [number, number] = [pos.coords.latitude, pos.coords.longitude]
-          setPosition(coord)
-          map.flyTo(coord, map.getZoom())
-        },
-        () => {}
+    void load()
+  }, [load])
+
+  async function downloadOffline() {
+    setBusy(true)
+    setError(null)
+    try {
+      const data = await api<Pivot[]>('/pivots/offline', {
+        method: 'POST',
+        body: JSON.stringify({
+          latitude: Number(centerLat),
+          longitude: Number(centerLng),
+          raio_km: Number(raio),
+        }),
+      })
+      localStorage.setItem(
+        'offline_pivots',
+        JSON.stringify({ savedAt: new Date().toISOString(), items: data }),
       )
+      setOfflineResult(data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro no download offline')
+    } finally {
+      setBusy(false)
     }
-  }, [map])
-
-  return position ? (
-    <Marker position={position} icon={userIcon}>
-      <Popup>Você está aqui</Popup>
-    </Marker>
-  ) : null
-}
-
-export default function Dashboard() {
-  const { user } = useAuth()
-  const [trails, setTrails] = useState<TrailResponse[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    trailService.list()
-      .then((res) => setTrails(res.data))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+  }
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="p-4 md:p-6 bg-dark-forest/50 border-b border-stone/20">
-        <h1 className="text-2xl font-display font-bold text-white">
-          Bem-vindo, {user?.nome || 'Trilheiro'}!
-        </h1>
-        <p className="text-stone mt-1">Explore trilhas, registre pontos de interesse e compartilhe aventuras.</p>
+    <div className="h-[calc(100vh-56px)] md:h-screen flex flex-col">
+      <div className="p-3 sm:p-4 border-b border-forest-700 bg-forest-900/70 backdrop-blur space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-sand-400">Mapa</h1>
+            <p className="text-xs text-stone-400">Sua posição e pinos na área visível</p>
+          </div>
+          <div className="flex-1 flex flex-col sm:flex-row gap-2">
+            <input
+              placeholder="Buscar trilha ou região"
+              className="flex-1 rounded-xl bg-forest-950 border border-forest-600 px-3 py-2 text-sm"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <select
+              className="rounded-xl bg-forest-950 border border-forest-600 px-3 py-2 text-sm"
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value)}
+            >
+              <option value="">Todos os tipos</option>
+              {TIPOS_PINO.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="rounded-xl bg-forest-700 px-4 py-2 text-sm font-medium"
+            >
+              Filtrar
+            </button>
+            <button
+              type="button"
+              onClick={() => setOfflineOpen(true)}
+              className="rounded-xl bg-signal-500/90 px-4 py-2 text-sm font-semibold text-forest-950"
+            >
+              Offline
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 relative">
-        <MapContainer
-          center={brazilCenter}
-          zoom={4}
-          className="h-full w-full"
-          zoomControl={true}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <LocationMarker />
-          {!loading && trails.map((trail) => (
-            <Marker
-              key={trail.id}
-              position={[trail.latitude, trail.longitude]}
-              icon={trailIcon}
-            >
-              <Popup>
-                <div className="text-dark-graphite">
-                  <strong>{trail.nome}</strong>
-                  {trail.dificuldade && <p className="text-sm">Dificuldade: {trail.dificuldade}</p>}
-                  {trail.distancia_km && <p className="text-sm">{trail.distancia_km.toLocaleString('pt-BR')} km</p>}
-                </div>
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
+      <div className="flex-1 min-h-0 p-3 sm:p-4">
+        <MapView
+          pivots={pivots}
+          onSelect={setSelected}
+          onBoundsChange={(b) => void load(b)}
+          height="100%"
+        />
       </div>
+
+      <PivotDetail
+        pivot={selected}
+        onClose={() => setSelected(null)}
+        onUpdated={(p) => {
+          setSelected(p)
+          setPivots((prev) => prev.map((x) => (x.id === p.id ? p : x)))
+        }}
+      />
+
+      <Modal open={offlineOpen} title="Baixar pinos offline" onClose={() => setOfflineOpen(false)}>
+        <div className="space-y-3">
+          <p className="text-sm text-stone-400">
+            Escolha um pino central (lat/lng) e o raio em km para salvar na memória do aparelho.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-sm col-span-1">
+              Latitude
+              <input
+                className="mt-1 w-full rounded-lg bg-forest-950 border border-forest-600 px-3 py-2"
+                value={centerLat}
+                onChange={(e) => setCenterLat(e.target.value)}
+              />
+            </label>
+            <label className="text-sm col-span-1">
+              Longitude
+              <input
+                className="mt-1 w-full rounded-lg bg-forest-950 border border-forest-600 px-3 py-2"
+                value={centerLng}
+                onChange={(e) => setCenterLng(e.target.value)}
+              />
+            </label>
+          </div>
+          <label className="block text-sm">
+            Raio (km)
+            <input
+              type="number"
+              min={0.1}
+              max={200}
+              step={0.1}
+              className="mt-1 w-full rounded-lg bg-forest-950 border border-forest-600 px-3 py-2"
+              value={raio}
+              onChange={(e) => setRaio(e.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void downloadOffline()}
+            className="w-full rounded-xl bg-signal-500 py-2.5 font-semibold text-forest-950 disabled:opacity-50"
+          >
+            {busy ? 'Baixando...' : 'Baixar'}
+          </button>
+          {offlineResult ? (
+            <div className="rounded-xl border border-forest-600 p-3 text-sm">
+              <p className="text-green-300 mb-2">
+                {formatNumber(offlineResult.length)} pinos salvos em localStorage
+              </p>
+              <ul className="max-h-40 overflow-y-auto space-y-1">
+                {offlineResult.map((p) => (
+                  <li key={p.id}>
+                    {p.nome}{' '}
+                    <span className="text-stone-500">
+                      ({formatNumber(p.distancia_km ?? 0)} km)
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </Modal>
+
+      <Modal open={!!error} title="Erro" onClose={() => setError(null)}>
+        <p>{error}</p>
+      </Modal>
     </div>
   )
 }

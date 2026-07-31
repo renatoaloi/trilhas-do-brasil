@@ -1,31 +1,55 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: trilhas
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d trilhas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite:////storage/app.db
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
-      - CORS_ORIGINS=http://localhost:8080
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/trilhas
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-use-long-secret}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRY: 3600
+      STORAGE_PATH: /storage
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
+      RATE_LIMIT: 30/minute
     volumes:
       - ./storage:/storage
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request, sys; urllib.request.urlopen('http://127.0.0.1:8000/health'); sys.exit(0)"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
       start_period: 20s
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8000/api
     ports:
-      - "8080:8080"
+      - "8080:80"
     depends_on:
       backend:
         condition: service_healthy
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000
+
+volumes:
+  pgdata:

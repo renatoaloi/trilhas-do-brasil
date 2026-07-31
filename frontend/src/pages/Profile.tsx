@@ -1,126 +1,143 @@
-import { useEffect, useState } from 'react'
-import { useAuth } from '../hooks/useAuth'
-import { profileService } from '../services/auth'
-import Modal from '../components/Modal'
+import { useEffect, useState, type FormEvent } from 'react'
+import { api, fileUrl } from '../services/api'
+import type { Profile as ProfileType } from '../services/types'
+import { Modal } from '../components/Modal'
+import { formatDate } from '../utils/format'
 
-export default function Profile() {
-  const { user } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+export function Profile() {
+  const [profile, setProfile] = useState<ProfileType | null>(null)
   const [biografia, setBiografia] = useState('')
   const [interesses, setInteresses] = useState('')
-  const [dataAniversario, setDataAniversario] = useState('')
-  const [error, setError] = useState('')
-  const [showError, setShowError] = useState(false)
-  const [showSuccess, setShowSuccess] = useState(false)
+  const [aniversario, setAniversario] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    profileService.getMe()
-      .then((res) => {
-        setBiografia(res.data.biografia || '')
-        setInteresses(res.data.interesses_pessoais || '')
-        setDataAniversario(res.data.data_aniversario || '')
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    ;(async () => {
+      try {
+        const p = await api<ProfileType>('/perfil')
+        setProfile(p)
+        setBiografia(p.biografia || '')
+        setInteresses(p.interesses || '')
+        setAniversario(p.data_aniversario || '')
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Erro ao carregar perfil')
+      }
+    })()
   }, [])
 
-  const handleSave = async (e: React.FormEvent) => {
+  async function onSave(e: FormEvent) {
     e.preventDefault()
-    setSaving(true)
-    setError('')
+    setBusy(true)
+    setMsg(null)
     try {
-      await profileService.updateMe({
-        biografia,
-        interesses_pessoais: interesses,
-        data_aniversario: dataAniversario || undefined,
+      const p = await api<ProfileType>('/perfil', {
+        method: 'PUT',
+        body: JSON.stringify({
+          biografia: biografia || null,
+          interesses: interesses || null,
+          data_aniversario: aniversario || null,
+        }),
       })
-      setShowSuccess(true)
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { detail?: string } } }
-        setError(axiosErr.response?.data?.detail || 'Erro ao salvar perfil.')
-      } else {
-        setError('Erro ao salvar perfil.')
-      }
-      setShowError(true)
+      setProfile(p)
+      setMsg('Perfil atualizado')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao salvar')
     } finally {
-      setSaving(false)
+      setBusy(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-4 border-safety-orange border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
+  async function onAvatar(file: File | null) {
+    if (!file) return
+    setBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const p = await api<ProfileType>('/perfil/avatar', { method: 'POST', body: fd })
+      setProfile(p)
+      setMsg('Avatar atualizado')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro no upload')
+    } finally {
+      setBusy(false)
+    }
   }
 
-  return (
-    <div className="max-w-2xl mx-auto p-4 md:p-6">
-      <h1 className="text-2xl font-display font-bold text-white mb-6">Meu Perfil</h1>
+  const avatar = fileUrl(profile?.avatar)
 
-      <div className="bg-dark-graphite border border-stone/20 rounded-xl p-6 mb-6">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-16 h-16 rounded-full bg-moss/30 flex items-center justify-center text-2xl font-bold text-safety-orange">
-            {user?.nome?.charAt(0).toUpperCase() || 'U'}
+  return (
+    <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold text-sand-400">Perfil</h1>
+        <p className="text-sm text-stone-400">Sua identidade na trilha</p>
+      </div>
+
+      <div className="rounded-2xl border border-forest-700 bg-forest-900/70 p-5 space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="h-20 w-20 rounded-full overflow-hidden border-2 border-signal-400 bg-forest-800 flex items-center justify-center text-2xl">
+            {avatar ? <img src={avatar} alt="Avatar" className="h-full w-full object-cover" /> : '🥾'}
           </div>
           <div>
-            <h2 className="text-xl font-display font-bold text-white">{user?.nome}</h2>
-            <p className="text-stone text-sm">{user?.email}</p>
+            <div className="font-semibold text-lg">{profile?.nome}</div>
+            <div className="text-sm text-stone-400">{profile?.email}</div>
+            <label className="mt-2 inline-block text-xs text-signal-400 cursor-pointer hover:underline">
+              Trocar avatar
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => void onAvatar(e.target.files?.[0] || null)}
+              />
+            </label>
           </div>
         </div>
 
-        <form onSubmit={handleSave} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-stone mb-1">Biografia</label>
+        <form onSubmit={onSave} className="space-y-3">
+          <label className="block text-sm">
+            Biografia
             <textarea
+              rows={4}
+              className="mt-1 w-full rounded-lg bg-forest-950 border border-forest-600 px-3 py-2"
               value={biografia}
               onChange={(e) => setBiografia(e.target.value)}
-              rows={4}
-              className="w-full px-3 py-2.5 bg-dark-graphite border border-stone/30 rounded-lg text-white placeholder-stone/50 focus:outline-none focus:border-safety-orange transition-colors resize-none"
-              placeholder="Conte um pouco sobre você e suas aventuras..."
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-stone mb-1">Interesses Pessoais</label>
-            <textarea
+          </label>
+          <label className="block text-sm">
+            Interesses pessoais
+            <input
+              className="mt-1 w-full rounded-lg bg-forest-950 border border-forest-600 px-3 py-2"
               value={interesses}
               onChange={(e) => setInteresses(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2.5 bg-dark-graphite border border-stone/30 rounded-lg text-white placeholder-stone/50 focus:outline-none focus:border-safety-orange transition-colors resize-none"
-              placeholder="Ex: trekking, ciclismo, escalada, rafting..."
+              placeholder="Trilhas, escalada, bike..."
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-stone mb-1">Data de Aniversário</label>
+          </label>
+          <label className="block text-sm">
+            Data de aniversário
             <input
               type="date"
-              value={dataAniversario}
-              onChange={(e) => setDataAniversario(e.target.value)}
-              className="w-full max-w-xs px-3 py-2.5 bg-dark-graphite border border-stone/30 rounded-lg text-white focus:outline-none focus:border-safety-orange transition-colors"
+              className="mt-1 w-full rounded-lg bg-forest-950 border border-forest-600 px-3 py-2"
+              value={aniversario}
+              onChange={(e) => setAniversario(e.target.value)}
             />
-          </div>
-
+            {profile?.data_aniversario ? (
+              <span className="text-xs text-stone-500">Atual: {formatDate(profile.data_aniversario)}</span>
+            ) : null}
+          </label>
           <button
             type="submit"
-            disabled={saving}
-            className="px-6 py-2.5 bg-safety-orange hover:bg-safety-orange/80 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
+            disabled={busy}
+            className="rounded-xl bg-signal-500 px-5 py-2.5 font-semibold text-forest-950 disabled:opacity-50"
           >
-            {saving ? 'Salvando...' : 'Salvar Perfil'}
+            Salvar perfil
           </button>
+          {msg ? <p className="text-sm text-green-300">{msg}</p> : null}
         </form>
       </div>
 
-      <Modal open={showError} title="Erro" onClose={() => setShowError(false)}>
-        <p className="text-stone">{error}</p>
-      </Modal>
-
-      <Modal open={showSuccess} title="Perfil Atualizado" onClose={() => setShowSuccess(false)}>
-        <p className="text-stone">Suas informações foram salvas com sucesso!</p>
+      <Modal open={!!error} title="Erro" onClose={() => setError(null)}>
+        <p>{error}</p>
       </Modal>
     </div>
   )

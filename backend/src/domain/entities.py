@@ -1,111 +1,142 @@
-import uuid
-from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, Float, Text, ForeignKey, Enum, Uuid
-from sqlalchemy.orm import relationship
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from typing import Optional
+from uuid import UUID
+
+from src.domain.enums import TipoAtencao, TipoPino, TipoVeiculo, TipoVoto
 
 
-def _enum_values(enum_type):
-    return [e.value for e in enum_type]
-from src.infrastructure.database import Base
-from src.domain.enums import TrailTypeEnum, PivotTypeEnum, DificuldadeEnum, CondicoesEnum
+@dataclass
+class User:
+    id: UUID
+    email: str
+    password_hash: str
+    nome: str
+    ativo: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    def validate(self) -> None:
+        if not self.email or "@" not in self.email:
+            raise ValueError("Email inválido")
+        if not self.nome or len(self.nome.strip()) < 2:
+            raise ValueError("Nome deve ter ao menos 2 caracteres")
+        if not self.password_hash:
+            raise ValueError("Senha é obrigatória")
 
 
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    nome = Column(String(255), nullable=False)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
-    ativo = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    profile = relationship("Profile", back_populates="user", uselist=False)
-    trails = relationship("Trail", back_populates="creator")
-    pivots = relationship("Pivot", back_populates="user")
+@dataclass
+class Profile:
+    id: UUID
+    user_id: UUID
+    avatar: Optional[str] = None
+    biografia: Optional[str] = None
+    interesses: Optional[str] = None
+    data_aniversario: Optional[date] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
-class Profile(Base):
-    __tablename__ = "profiles"
+@dataclass
+class Vehicle:
+    id: UUID
+    user_id: UUID
+    marca: str
+    modelo: str
+    descricao: Optional[str] = None
+    tipo: TipoVeiculo = TipoVeiculo.OUTROS
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
-    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, unique=True)
-    avatar = Column(Text, nullable=True)
-    biografia = Column(Text, nullable=True)
-    interesses_pessoais = Column(Text, nullable=True)
-    data_aniversario = Column(DateTime, nullable=True)
-
-    user = relationship("User", back_populates="profile")
-
-
-class TrailType(Base):
-    __tablename__ = "trail_types"
-
-    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    nome = Column(Enum(TrailTypeEnum, values_callable=_enum_values), nullable=False, unique=True)
-
-    trails = relationship("Trail", back_populates="trail_type")
+    def validate(self) -> None:
+        if not self.marca or not self.marca.strip():
+            raise ValueError("Marca é obrigatória")
+        if not self.modelo or not self.modelo.strip():
+            raise ValueError("Modelo é obrigatório")
 
 
-class Trail(Base):
-    __tablename__ = "trails"
+@dataclass
+class Pivot:
+    id: UUID
+    user_id: UUID
+    nome: str
+    descricao: Optional[str] = None
+    latitude: float = 0.0
+    longitude: float = 0.0
+    foto: Optional[str] = None
+    tipo: TipoPino = TipoPino.A_PE
+    regiao: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    votos_positivos: int = 0
+    votos_negativos: int = 0
 
-    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    nome = Column(String(255), nullable=False)
-    nome_social = Column(String(255), nullable=True)
-    trail_type_id = Column(Uuid, ForeignKey("trail_types.id"), nullable=False)
-    descricao = Column(Text, nullable=True)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
-    dificuldade = Column(Enum(DificuldadeEnum, values_callable=_enum_values), nullable=False, default=DificuldadeEnum.MODERADO)
-    distancia_km = Column(Float, nullable=True)
-    elevacao_m = Column(Float, nullable=True)
-    duracao_estimada = Column(String(50), nullable=True)
-    condicoes = Column(Enum(CondicoesEnum, values_callable=_enum_values), nullable=False, default=CondicoesEnum.ABERTA)
-    created_by = Column(Uuid, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    def validate(self) -> None:
+        if not self.nome or not self.nome.strip():
+            raise ValueError("Nome do pino é obrigatório")
+        if not (-90 <= self.latitude <= 90):
+            raise ValueError("Latitude inválida")
+        if not (-180 <= self.longitude <= 180):
+            raise ValueError("Longitude inválida")
 
-    trail_type = relationship("TrailType", back_populates="trails")
-    creator = relationship("User", back_populates="trails")
-    pivots = relationship("Pivot", back_populates="trail")
+    @property
+    def reputacao_score(self) -> int:
+        return self.votos_positivos - self.votos_negativos
 
-
-class PivotType(Base):
-    __tablename__ = "pivot_types"
-
-    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    nome = Column(Enum(PivotTypeEnum, values_callable=_enum_values), nullable=False, unique=True)
-
-    pivots = relationship("Pivot", back_populates="pivot_type")
-
-
-class Pivot(Base):
-    __tablename__ = "pivots"
-
-    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    trail_id = Column(Uuid, ForeignKey("trails.id"), nullable=False)
-    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
-    pivot_type_id = Column(Uuid, ForeignKey("pivot_types.id"), nullable=False)
-    descricao = Column(Text, nullable=True)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    trail = relationship("Trail", back_populates="pivots")
-    user = relationship("User", back_populates="pivots")
-    pivot_type = relationship("PivotType", back_populates="pivots")
-    media = relationship("PivotMedia", back_populates="pivot")
+    @property
+    def reputacao_cor(self) -> str:
+        score = self.reputacao_score
+        total = self.votos_positivos + self.votos_negativos
+        if total == 0:
+            return "neutro"
+        if score >= 3:
+            return "verde"
+        if score <= -3:
+            return "vermelho"
+        if score > 0:
+            return "verde_claro"
+        if score < 0:
+            return "laranja"
+        return "neutro"
 
 
-class PivotMedia(Base):
-    __tablename__ = "pivot_media"
+@dataclass
+class AttentionPoint:
+    id: UUID
+    pivot_id: UUID
+    user_id: UUID
+    nome: str
+    descricao: Optional[str] = None
+    tipo: TipoAtencao = TipoAtencao.PERIGO
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
-    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    pivot_id = Column(Uuid, ForeignKey("pivots.id"), nullable=False)
-    url = Column(Text, nullable=False)
-    tipo = Column(String(20), nullable=False, default="imagem")
+    def validate(self) -> None:
+        if not self.nome or not self.nome.strip():
+            raise ValueError("Nome do ponto de atenção é obrigatório")
 
-    pivot = relationship("Pivot", back_populates="media")
+
+@dataclass
+class Vote:
+    id: UUID
+    pivot_id: UUID
+    user_id: UUID
+    tipo: TipoVoto
+    created_at: Optional[datetime] = None
+
+
+@dataclass
+class Comment:
+    id: UUID
+    pivot_id: UUID
+    user_id: UUID
+    texto: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    autor_nome: Optional[str] = field(default=None)
+
+    def validate(self) -> None:
+        if not self.texto or not self.texto.strip():
+            raise ValueError("Comentário não pode ser vazio")
+        if len(self.texto) > 2000:
+            raise ValueError("Comentário muito longo")

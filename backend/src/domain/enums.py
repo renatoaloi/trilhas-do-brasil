@@ -1,31 +1,37 @@
-import enum
+from enum import Enum
 
 
-class TrailTypeEnum(str, enum.Enum):
-    A_PE = "a pé"
+class TipoPino(str, Enum):
+    A_PE = "a_pe"
     BICICLETA = "bicicleta"
     MOTO = "moto"
     JIPE = "jipe"
     ESCALADA = "escalada"
-    AQUATICA = "aquática"
+    AQUATICA = "aquatica"
+    QUADRICICLO = "quadriciclo"
+    CAVALO = "cavalo"
+    MISTA = "mista"
 
 
-class PivotTypeEnum(str, enum.Enum):
-    FOTOS = "Fotos"
-    INFORMACOES = "Informações"
-    SEGURANCA = "Segurança"
-    DIRECOES = "Direções"
-
-
-class DificuldadeEnum(str, enum.Enum):
-    FACIL = "fácil"
-    MODERADO = "moderado"
-    DIFICIL = "difícil"
-    EXPERT = "expert"
-
-
-class CondicoesEnum(str, enum.Enum):
-    ABERTA = "aberta"
-    FECHADA = "fechada"
+class TipoAtencao(str, Enum):
+    DESMORONAMENTO = "desmoronamento"
+    PONTO_INTRANSPONIVEL = "ponto_intransponivel"
+    ALAGAMENTO = "alagamento"
+    PROPRIEDADE_PRIVADA = "propriedade_privada"
     PERIGO = "perigo"
-    EM_MANUTENCAO = "em manutenção"
+    ASSALTO = "assalto"
+    QUEIMADA = "queimada"
+
+
+class TipoVeiculo(str, Enum):
+    CARRO = "carro"
+    MOTO = "moto"
+    JIPE = "jipe"
+    TENIS = "tenis"
+    BICICLETA = "bicicleta"
+    OUTROS = "outros"
+
+
+class TipoVoto(str, Enum):
+    POSITIVO = "positivo"
+    NEGATIVO = "negativo"

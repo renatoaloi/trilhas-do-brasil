@@ -1,48 +1,82 @@
 # Trilhas do Brasil
 
-Rede social para trilheiros — um Waze para trilhas no Brasil. Navegação, pontos de interesse, alertas de perigo e compartilhamento de rotas.
+Rede social / GPS colaborativo para trilheiros e turistas no Brasil. Mapa com pinos (pivots), votos de reputação, pontos de atenção, download offline por raio, veículos e perfil.
 
 ## Stack
 
-- **Backend**: Python FastAPI + SQLAlchemy + Alembic (Clean Architecture)
-- **Frontend**: React + Vite + Tailwind + TypeScript
-- **Database**: SQLite (dev) / PostgreSQL via Supabase (produção)
-- **Auth**: JWT com bcrypt
-- **Container**: Docker Compose
+- **Backend:** Python 3.12, FastAPI, SQLAlchemy async, Alembic, JWT (pyjwt + bcrypt)
+- **Banco:** PostgreSQL (Supabase ou Postgres local). SQLite suportado em desenvolvimento via `DATABASE_URL`
+- **Frontend:** React + Vite + Tailwind + TypeScript
+- **Mapas:** Leaflet + OpenStreetMap (gratuito, sem chave de API)
+- **Docker:** Compose na raiz (Postgres + API + frontend)
 
 ## Requisitos
 
-- Python 3.12+
-- Node.js 20+
-- Docker (opcional)
+- Docker / Docker Compose **ou**
+- Python 3.12+, Node.js 20+, opcionalmente PostgreSQL
 
-## Variáveis de Ambiente
+## Variáveis de ambiente
 
 ### Backend (`backend/.env`)
 
-| Variável | Descrição | Padrão |
-|---|---|---|
-| `DATABASE_URL` | Connection string do banco | `sqlite:///./storage/app.db` |
-| `JWT_SECRET` | Chave para assinar tokens JWT | `dev-secret-change-in-production` |
-| `JWT_ALGORITHM` | Algoritmo JWT | `HS256` |
-| `JWT_EXPIRY` | Expiração do token (segundos) | `3600` |
-| `CORS_ORIGINS` | Origens permitidas (separadas por vírgula) | `http://localhost:5173,http://localhost:3000` |
+| Variável | Descrição | Exemplo |
+|----------|-----------|---------|
+| `DATABASE_URL` | Connection string async | `postgresql+asyncpg://user:pass@host:5432/db` ou `sqlite+aiosqlite:///./storage/app.db` |
+| `JWT_SECRET` | Segredo JWT (**obrigatório em produção**) | string longa aleatória |
+| `JWT_ALGORITHM` | Algoritmo | `HS256` |
+| `JWT_EXPIRY` | Expiração em segundos | `3600` |
+| `STORAGE_PATH` | Pasta de uploads | `./storage` ou `/storage` |
+| `CORS_ORIGINS` | Origens permitidas (vírgula) | `http://localhost:5173,http://localhost:8080` |
+| `RATE_LIMIT` | Limite em auth | `30/minute` |
+
+Para **Supabase**, use a connection string do painel no formato:
+
+```env
+DATABASE_URL=postgresql+asyncpg://postgres.<ref>:<password>@aws-0-....pooler.supabase.com:6543/postgres?ssl=require
+```
+
+O backend **não** usa SDK Supabase — apenas PostgreSQL via SQLAlchemy/asyncpg.
 
 ### Frontend (`frontend/.env`)
 
-| Variável | Descrição | Padrão |
-|---|---|---|
-| `VITE_API_BASE_URL` | URL base da API | `http://localhost:8000` |
+| Variável | Descrição | Exemplo |
+|----------|-----------|---------|
+| `VITE_API_BASE_URL` | Base da API **incluindo** `/api` | `http://localhost:8000/api` |
 
-## Desenvolvimento
+Mapa via Leaflet/OSM — não precisa de chave. **Nunca** coloque `JWT_SECRET`, `DATABASE_URL` ou chaves privadas em `VITE_*`.
+
+## Docker Compose
+
+```bash
+# na raiz do projeto
+docker compose up --build
+```
+
+- Frontend: http://localhost:8080  
+- API: http://localhost:8000  
+- Health: http://localhost:8000/api/health  
+- Docs: http://localhost:8000/docs  
+
+```bash
+docker compose down
+```
+
+## Desenvolvimento manual
 
 ### Backend
 
 ```bash
 cd backend
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# Linux/macOS:
+# source .venv/bin/activate
 pip install -r requirements.txt
+copy .env.example .env   # ou cp
+# ajuste DATABASE_URL / JWT_SECRET
 alembic upgrade head
-uvicorn src.main:app --reload
+uvicorn src.main:app --reload --port 8000
 ```
 
 ### Frontend
@@ -50,49 +84,49 @@ uvicorn src.main:app --reload
 ```bash
 cd frontend
 npm install
+copy .env.example .env
 npm run dev
 ```
 
-### Docker Compose
+App em http://localhost:5173
 
-```bash
-docker compose up --build
-```
-
-O frontend estará em `http://localhost:8080` e o backend em `http://localhost:8000`.
-
-## Migrations
+### Testes backend
 
 ```bash
 cd backend
-alembic revision --autogenerate -m "descricao"
-alembic upgrade head
+pytest tests -q
 ```
+
+## API principal (prefixo `/api`)
+
+| Método | Rota | Auth |
+|--------|------|------|
+| GET | `/health` | não |
+| POST | `/auth/register` | não |
+| POST | `/auth/token` | não |
+| PUT | `/auth/password` | sim |
+| GET/PUT | `/perfil` | sim |
+| CRUD | `/veiculos` | sim |
+| CRUD | `/pivots` | sim |
+| POST | `/pivots/offline` | sim (centro + raio_km) |
+| POST | `/pivots/{id}/votos` | sim |
+| GET/POST | `/pivots/{id}/comentarios` | sim |
+| GET/POST | `/pivots/{id}/atencao` | sim |
+
+## Segurança (checklist SaaS)
+
+- JWT com expiração; senhas com bcrypt
+- Rotas privadas com `Authorization: Bearer`
+- Frontend só fala com o backend REST
+- Rate limit em `/auth/register` e `/auth/token`
+- CORS configurável; uploads com tipo/tamanho limitados
+- Sem segredos no bundle frontend
 
 ## Estrutura
 
 ```
-backend/
-  src/
-    domain/       # Entidades e interfaces
-    application/  # DTOs, serviços, dependências
-    infrastructure/ # Banco, repositórios, segurança
-    routes/       # Endpoints FastAPI
-frontend/
-  src/
-    components/   # Componentes reutilizáveis
-    pages/        # Páginas da aplicação
-    services/     # API e serviços
-    hooks/        # Hooks customizados
-    contexts/     # Contextos React
-storage/          # Dados de runtime (banco, uploads)
+backend/src/{domain,application,infrastructure}
+frontend/src/{components,pages,hooks,services}
+storage/          # runtime only — não editar manualmente
+docker-compose.yml
 ```
-
-## Regras de Arquitetura
-
-- Frontend se comunica **exclusivamente** com o backend via REST API.
-- **Sem acesso direto** a banco, Supabase SDK ou anon key no frontend.
-- Supabase é usado **apenas como PostgreSQL** via connection string.
-- **Sem `alert()` ou `confirm()`** — use componentes Modal.
-- Locale brasileiro para datas, horas, números e moeda.
-- IDs UUID em todas as entidades.

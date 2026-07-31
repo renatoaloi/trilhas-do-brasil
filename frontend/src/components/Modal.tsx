@@ -1,51 +1,36 @@
-import { useEffect, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 
-interface ModalProps {
+type Props = {
   open: boolean
-  title?: string
+  title: string
+  onClose: () => void
   children: ReactNode
-  onClose?: () => void
-  actions?: ReactNode
+  footer?: ReactNode
 }
 
-export default function Modal({ open, title, children, onClose, actions }: ModalProps) {
-  useEffect(() => {
-    if (!open) return
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && onClose) onClose()
-    }
-    document.addEventListener('keydown', handleEsc)
-    return () => document.removeEventListener('keydown', handleEsc)
-  }, [open, onClose])
-
+export function Modal({ open, title, onClose, children, footer }: Props) {
   if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md mx-4 bg-dark-graphite border border-stone/30 rounded-xl shadow-2xl">
-        {title && (
-          <div className="flex items-center justify-between p-4 border-b border-stone/20">
-            <h2 className="text-lg font-display font-bold text-white">{title}</h2>
-            {onClose && (
-              <button
-                onClick={onClose}
-                className="text-stone hover:text-white transition-colors"
-                aria-label="Fechar"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        )}
-        <div className="p-4">{children}</div>
-        {actions && (
-          <div className="flex justify-end gap-3 p-4 border-t border-stone/20">
-            {actions}
-          </div>
-        )}
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-6">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/70"
+        aria-label="Fechar"
+        onClick={onClose}
+      />
+      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-forest-600/50 bg-forest-900 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-forest-700 px-4 py-3">
+          <h2 className="text-lg font-semibold text-sand-400">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg px-2 py-1 text-stone-300 hover:bg-forest-800"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="px-4 py-4">{children}</div>
+        {footer ? <div className="border-t border-forest-700 px-4 py-3">{footer}</div> : null}
       </div>
     </div>
   )

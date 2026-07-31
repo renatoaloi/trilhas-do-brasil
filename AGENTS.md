@@ -1,77 +1,50 @@
-# Trilhas do Brasil — AGENTS.md
+# AGENTS.md
 
-## Repo state
+Spec package for **Trilhas do Brasil** (Pegada de Silício). App code is not built yet — only `Project.md`, `Prompt.txt`, and `config/*`. `backend/` and `frontend/` are stubs (`.gitignore` only).
 
-This is a **specification scaffold**, not a working codebase. Zero application code exists —
-only `.gitignore` placeholders in `backend/`, `frontend/`, `docker/`, `storage/`. An AI
-must **generate** the entire project following the prompts in this repo.
+## Read order (do not skip)
 
-## Entry point
+1. `Prompt.txt` — execution order and **mandatory** SaaS extensions for this profile
+2. `Project.md` — product/business/visual requirements
+3. `config/TechSpecsConfig.md`, `DockerConfig.md`, `LoginConfig.md`, `SupabaseConfig.md`, `SecurityChecklist.md`
 
-- `Prompt.txt` — master execution order; read this first.
-- `Project.md` — product requirements (trail social‑network for Brazil).
-- `config/` — technical specs. Four files are **mandatory**:
-  `LoginConfig.md`, `SupabaseConfig.md`, `SecurityChecklist.md`, `TechSpecsConfig.md`.
-  `DockerConfig.md` is also required for container setup.
+Prefer those files over this summary when details conflict in nuance. If specs disagree on optionality, **`Prompt.txt` wins for this package**.
 
-## Architecture (mandated, not yet built)
+## Non-negotiables
 
-```
-backend/ (Clean Architecture)
-  src/application/
-  src/domain/
-  src/infrastructure/
-frontend/ (React + Vite + Tailwind + TypeScript)
-  src/components/
-  src/pages/
-  src/hooks/
-  src/services/
-storage/          → runtime data, never edit manually
-```
+- **Never write/edit `storage/`** — runtime only (DB files, uploads). Bind-mount in Docker; create `/storage` in backend image before Alembic.
+- **Frontend ↔ backend only** via REST. No direct DB, no Supabase/Firebase SDKs, no third-party data clients in the browser.
+- **JWT + Supabase are required** here (not optional). `LoginConfig.md` / `SupabaseConfig.md` prose about “only when user asks” does **not** apply to this profile.
+- Supabase = **managed PostgreSQL only**: `postgresql+asyncpg://...` in backend. No `supabase-py`, no Supabase REST, no anon/service_role keys anywhere.
+- All public API routes under **`/api`**. Mount routers with `prefix="/api"`; do not mix prefixed and bare paths.
+- **`/api/health`** must be unauthenticated (no API key/JWT). Used by Docker healthchecks.
+- `VITE_API_BASE_URL` **must include** `/api` (e.g. `http://localhost:8000/api`). Service paths are relative only (`/health`, `/auth/token`) — never `/api/...` again (avoids `/api/api/...`).
+- No secrets in `VITE_*` or frontend bundle. `JWT_SECRET`, `DATABASE_URL`, etc. backend-only.
+- No `alert()` / `confirm()` — use Modal components.
+- Entity IDs: **UUID**. Uploads: `storage/<entity_id>/`.
+- Backend port: **not 80**. Frontend compose port example: **8080**. Install **wget** in backend image for healthcheck.
 
-- **Backend**: Python FastAPI + SQLAlchemy + Alembic. Layers: domain → application → infrastructure.
-  Dependency injection: service → controller, db → service.
-- **Frontend**: React + Vite + Tailwind + TypeScript. Dashboard is homepage. Sidebar navigation.
-- **IDs**: All entities use UUID.
+## Target stack (when implementing)
 
-## Do‑not‑violate rules
+| Layer | Choice |
+|--------|--------|
+| Backend | Python, FastAPI, SQLAlchemy, Alembic, Clean Architecture (`domain` / `application` / `infrastructure`) |
+| Auth | JWT (`pyjwt` + `bcrypt`): `POST /auth/register`, `POST /auth/token`, `PUT /auth/password` (authenticated; no current password) |
+| DB | Production path: Supabase PostgreSQL async (`asyncpg` + `greenlet`). Local MVP docs mention SQLite under `storage/` — ensure parent dir of `DATABASE_URL` exists before engine/Alembic |
+| Frontend | React + Vite + Tailwind + TypeScript; sidebar: Mapa, Pivots, Veículos, Perfil; initial page = dashboard; `PrivateRoute` + AuthContext; pt-BR dates/numbers |
+| Maps | Leaflet + OpenStreetMap (no API key). Never put backend secrets in `VITE_*` |
+| Docker | Root compose; `./storage:/storage`; frontend waits on API health |
 
-1. **Frontend communicates ONLY with backend** via REST API. No direct DB access, no Supabase SDK,
-   no anon key, no `supabase-js`/`supabase-py`. The frontend never connects to any external service.
-2. **Supabase is PostgreSQL only** — connection via `postgresql+asyncpg://...` string, never the
-   Supabase REST API or SDK.
-3. **No `alert()` or `confirm()`** — use Modal components.
-4. **Brazilian locale**: dates, hours, numbers, currency.
-5. **Secrets never in `VITE_*` env vars** — `JWT_SECRET`, `DATABASE_URL`, API keys on backend only.
+## Auth routes note
 
-## Build / run (will apply after generation)
+Auth paths above are relative to the `/api` mount → public URLs are `/api/auth/register`, `/api/auth/token`, `/api/auth/password`. Protect CRUD with `get_current_user`; on frontend 401 → logout.
 
-- **Backend dev**: `uvicorn src.main:app --reload`
-- **Frontend dev**: `npm run dev` (Vite)
-- **Migrations**: `alembic upgrade head`
-- **Docker**: compose at repo root. Health check backend before frontend. Bind‑mount `./storage:/storage`.
-  Create `/storage` in backend Dockerfile before Alembic runs.
-- **Storage**: SQLite default at `storage/app.db`. Ensure parent dir exists before connecting.
+## Verification before “done”
 
-## Config files as source of truth
+- Backend starts; frontend builds; `alembic upgrade head` OK; compose up OK
+- `SecurityChecklist.md` satisfied (no frontend secrets, bearer on private routes, rate limit on auth/public, CORS configurable for prod)
+- README documents env vars and run commands **without real secrets**
 
-| File | What it mandates |
-|---|---|
-| `config/LoginConfig.md` | JWT auth: `/auth/register`, `/auth/token`, `/auth/password`. AuthContext, PrivateRoute, automatic 401 → logout. |
-| `config/SupabaseConfig.md` | Async PostgreSQL via asyncpg. Backend‑only. Migrate from SQLite. |
-| `config/SecurityChecklist.md` | No hardcoded secrets, bcrypt, JWT expiry, CORS restrictable, rate‑limit on auth routes, no stack traces in errors, logs without secrets. |
-| `config/DockerConfig.md` | Two Dockerfiles, compose at root, storage bind‑mount, health check, no port 80 for backend. |
-| `config/TechSpecsConfig.md` | Clean Architecture, DI, UUIDs, markdown fields, Vite env for public config only. |
+## Product one-liner
 
-## Validation before delivery (from SecurityChecklist)
-
-1. Backend starts without errors.
-2. Frontend compiles without errors.
-3. Alembic migrations run successfully.
-4. Docker compose brings up the environment.
-5. No secrets in frontend bundle.
-6. Private routes require Bearer token.
-7. Frontend does not access Supabase directly.
-8. CORS configurable per environment.
-9. Rate limit exists on sensitive routes.
-10. README documents env vars without exposing secrets.
+Social/GPS-style trail app for Brazil: map-first pins (pivots), votes → green→red reputation, offline pin download by center+radius, attention points, vehicles, profiles; mobile-first dark forest/adventure theme (see `Project.md`).
