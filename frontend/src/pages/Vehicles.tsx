@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { api } from '../services/api'
+import { api, fileUrl } from '../services/api'
 import type { Vehicle } from '../services/types'
 import { TIPOS_VEICULO } from '../services/types'
 import { Modal } from '../components/Modal'
@@ -14,6 +14,7 @@ export function Vehicles() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [toDelete, setToDelete] = useState<Vehicle | null>(null)
+  const [fotoFile, setFotoFile] = useState<File | null>(null)
 
   async function load() {
     try {
@@ -30,6 +31,7 @@ export function Vehicles() {
   function startCreate() {
     setEditId(null)
     setForm(empty)
+    setFotoFile(null)
     setOpen(true)
   }
 
@@ -41,6 +43,7 @@ export function Vehicles() {
       descricao: v.descricao || '',
       tipo: v.tipo,
     })
+    setFotoFile(null)
     setOpen(true)
   }
 
@@ -54,18 +57,30 @@ export function Vehicles() {
         descricao: form.descricao || null,
         tipo: form.tipo,
       }
+      let saved: Vehicle
       if (editId) {
-        const updated = await api<Vehicle>(`/veiculos/${editId}`, {
+        saved = await api<Vehicle>(`/veiculos/${editId}`, {
           method: 'PUT',
           body: JSON.stringify(body),
         })
-        setItems((prev) => prev.map((x) => (x.id === editId ? updated : x)))
       } else {
-        const created = await api<Vehicle>('/veiculos', {
+        saved = await api<Vehicle>('/veiculos', {
           method: 'POST',
           body: JSON.stringify(body),
         })
-        setItems((prev) => [created, ...prev])
+      }
+      if (fotoFile) {
+        const fd = new FormData()
+        fd.append('file', fotoFile)
+        saved = await api<Vehicle>(`/veiculos/${saved.id}/foto`, {
+          method: 'POST',
+          body: fd,
+        })
+      }
+      if (editId) {
+        setItems((prev) => prev.map((x) => (x.id === saved.id ? saved : x)))
+      } else {
+        setItems((prev) => [saved, ...prev])
       }
       setOpen(false)
     } catch (err) {
@@ -109,30 +124,39 @@ export function Vehicles() {
         {items.map((v) => (
           <article
             key={v.id}
-            className="rounded-2xl border border-forest-700 bg-forest-900/70 p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
+            className="rounded-2xl border border-forest-700 bg-forest-900/70 p-4 flex flex-col sm:flex-row gap-4"
           >
-            <div>
-              <h2 className="font-semibold">
-                {v.marca} {v.modelo}
-              </h2>
-              <p className="text-sm text-stone-400 capitalize">{v.tipo}</p>
+            {v.foto ? (
+              <img
+                src={fileUrl(v.foto)}
+                alt={`${v.marca} ${v.modelo}`}
+                className="w-full sm:w-28 h-28 object-cover rounded-xl"
+              />
+            ) : null}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold">
+                  {v.marca} {v.modelo}
+                </h2>
+                <span className="text-xs text-stone-400 capitalize">{v.tipo}</span>
+              </div>
               {v.descricao ? <p className="text-sm mt-1 text-stone-300">{v.descricao}</p> : null}
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="rounded-lg border border-forest-600 px-3 py-1.5 text-sm"
-                onClick={() => startEdit(v)}
-              >
-                Editar
-              </button>
-              <button
-                type="button"
-                className="rounded-lg border border-danger-500/40 text-red-300 px-3 py-1.5 text-sm"
-                onClick={() => setToDelete(v)}
-              >
-                Excluir
-              </button>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-forest-600 px-3 py-1.5 text-sm"
+                  onClick={() => startEdit(v)}
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-danger-500/40 text-red-300 px-3 py-1.5 text-sm"
+                  onClick={() => setToDelete(v)}
+                >
+                  Excluir
+                </button>
+              </div>
             </div>
           </article>
         ))}
@@ -173,6 +197,28 @@ export function Vehicles() {
             value={form.descricao}
             onChange={(e) => setForm({ ...form, descricao: e.target.value })}
           />
+          <div className="space-y-2">
+            <label className="block text-sm text-stone-400">Foto</label>
+            {fotoFile ? (
+              <img
+                src={URL.createObjectURL(fotoFile)}
+                alt="Preview"
+                className="w-full h-40 object-cover rounded-xl"
+              />
+            ) : editId && items.find((v) => v.id === editId)?.foto ? (
+              <img
+                src={fileUrl(items.find((v) => v.id === editId)!.foto)}
+                alt="Foto atual"
+                className="w-full h-40 object-cover rounded-xl"
+              />
+            ) : null}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="w-full text-sm text-stone-300 file:mr-2 file:rounded-lg file:border-0 file:bg-forest-700 file:px-3 file:py-1.5 file:text-sm file:text-stone-200"
+              onChange={(e) => setFotoFile(e.target.files?.[0] || null)}
+            />
+          </div>
           <button
             type="submit"
             disabled={busy}

@@ -82,6 +82,7 @@ class VehicleResponse(BaseModel):
     modelo: str
     descricao: Optional[str] = None
     tipo: str
+    foto: Optional[str] = None
     created_at: Optional[datetime] = None
 
 

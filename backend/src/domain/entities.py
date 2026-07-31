@@ -45,6 +45,7 @@ class Vehicle:
     modelo: str
     descricao: Optional[str] = None
     tipo: TipoVeiculo = TipoVeiculo.OUTROS
+    foto: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
