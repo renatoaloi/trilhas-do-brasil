@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Circle, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import type { Pivot } from '../services/types'
 import { reputationColor } from '../utils/format'
@@ -27,11 +27,18 @@ type Bounds = {
   max_lng: number
 }
 
+export type RadiusOverlay = {
+  lat: number
+  lng: number
+  radiusKm: number
+}
+
 type Props = {
   pivots: Pivot[]
   onSelect: (pivot: Pivot) => void
   onBoundsChange?: (bounds: Bounds) => void
   onPlaceRequest?: (coords: { lat: number; lng: number }) => void
+  radiusOverlay?: RadiusOverlay | null
   center?: { lat: number; lng: number } | null
   height?: string
 }
@@ -101,6 +108,7 @@ export function MapView({
   onSelect,
   onBoundsChange,
   onPlaceRequest,
+  radiusOverlay,
   center,
   height = '100%',
 }: Props) {
@@ -142,6 +150,19 @@ export function MapView({
           <Marker position={[userPos.lat, userPos.lng]} icon={userIcon}>
             <Popup>Você está aqui</Popup>
           </Marker>
+        ) : null}
+
+        {radiusOverlay ? (
+          <Circle
+            center={[radiusOverlay.lat, radiusOverlay.lng]}
+            radius={radiusOverlay.radiusKm * 1000}
+            pathOptions={{
+              color: '#e07a3d',
+              fillColor: '#e07a3d',
+              fillOpacity: 0.12,
+              weight: 2,
+            }}
+          />
         ) : null}
 
         {pivots.map((p) => (
