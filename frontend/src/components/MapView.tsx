@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import type { Pivot } from '../services/types'
 import { reputationColor } from '../utils/format'
@@ -31,6 +31,7 @@ type Props = {
   pivots: Pivot[]
   onSelect: (pivot: Pivot) => void
   onBoundsChange?: (bounds: Bounds) => void
+  onPlaceRequest?: (coords: { lat: number; lng: number }) => void
   center?: { lat: number; lng: number } | null
   height?: string
 }
@@ -73,6 +74,20 @@ function BoundsWatcher({ onBoundsChange }: { onBoundsChange?: (b: Bounds) => voi
   return null
 }
 
+function PlaceClickHandler({
+  onPlaceRequest,
+}: {
+  onPlaceRequest?: (coords: { lat: number; lng: number }) => void
+}) {
+  useMapEvents({
+    dblclick: (e) => {
+      if (!onPlaceRequest) return
+      onPlaceRequest({ lat: e.latlng.lat, lng: e.latlng.lng })
+    },
+  })
+  return null
+}
+
 function Recenter({ center }: { center: [number, number] }) {
   const map = useMap()
   useEffect(() => {
@@ -81,7 +96,14 @@ function Recenter({ center }: { center: [number, number] }) {
   return null
 }
 
-export function MapView({ pivots, onSelect, onBoundsChange, center, height = '100%' }: Props) {
+export function MapView({
+  pivots,
+  onSelect,
+  onBoundsChange,
+  onPlaceRequest,
+  center,
+  height = '100%',
+}: Props) {
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null)
 
   useEffect(() => {
@@ -106,12 +128,14 @@ export function MapView({ pivots, onSelect, onBoundsChange, center, height = '10
         zoom={12}
         style={{ height: '100%', width: '100%', background: '#102018' }}
         scrollWheelZoom
+        doubleClickZoom={!onPlaceRequest}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <BoundsWatcher onBoundsChange={onBoundsChange} />
+        <PlaceClickHandler onPlaceRequest={onPlaceRequest} />
         <Recenter center={mapCenter} />
 
         {userPos ? (
@@ -133,11 +157,11 @@ export function MapView({ pivots, onSelect, onBoundsChange, center, height = '10
             }}
             eventHandlers={{ click: () => onSelect(p) }}
           >
-            <Popup>
+            <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
               <strong>{p.nome}</strong>
               <br />
               <span style={{ fontSize: 12 }}>{p.tipo}</span>
-            </Popup>
+            </Tooltip>
           </CircleMarker>
         ))}
       </MapContainer>
