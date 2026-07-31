@@ -1,11 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { MapView } from '../components/MapView'
+import { CreatePivotModal, type PlaceCoords } from '../components/CreatePivotModal'
 import { PivotDetail } from '../components/PivotDetail'
 import { Modal } from '../components/Modal'
 import { api } from '../services/api'
 import type { Pivot } from '../services/types'
 import { TIPOS_PINO } from '../services/types'
 import { formatNumber } from '../utils/format'
+
+type Bounds = {
+  min_lat: number
+  max_lat: number
+  min_lng: number
+  max_lng: number
+}
 
 export function Dashboard() {
   const [pivots, setPivots] = useState<Pivot[]>([])
@@ -19,37 +27,33 @@ export function Dashboard() {
   const [raio, setRaio] = useState('10')
   const [offlineResult, setOfflineResult] = useState<Pivot[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [placeCoords, setPlaceCoords] = useState<PlaceCoords | null>(null)
+  const boundsRef = useRef<Bounds | undefined>(undefined)
+  const filtersRef = useRef({ q: '', tipo: '' })
+  filtersRef.current = { q, tipo }
 
-  const load = useCallback(
-    async (bounds?: {
-      min_lat: number
-      max_lat: number
-      min_lng: number
-      max_lng: number
-    }) => {
-      try {
-        const params = new URLSearchParams()
-        if (q) params.set('q', q)
-        if (tipo) params.set('tipo', tipo)
-        if (bounds) {
-          params.set('min_lat', String(bounds.min_lat))
-          params.set('max_lat', String(bounds.max_lat))
-          params.set('min_lng', String(bounds.min_lng))
-          params.set('max_lng', String(bounds.max_lng))
-        }
-        const qs = params.toString()
-        const data = await api<Pivot[]>(`/pivots${qs ? `?${qs}` : ''}`)
-        setPivots(data)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Erro ao carregar pinos')
+  const load = useCallback(async (bounds?: Bounds) => {
+    if (bounds) boundsRef.current = bounds
+    const activeBounds = bounds ?? boundsRef.current
+    const { q: qf, tipo: tf } = filtersRef.current
+    try {
+      const params = new URLSearchParams()
+      if (qf) params.set('q', qf)
+      if (tf) params.set('tipo', tf)
+      if (activeBounds) {
+        params.set('min_lat', String(activeBounds.min_lat))
+        params.set('max_lat', String(activeBounds.max_lat))
+        params.set('min_lng', String(activeBounds.min_lng))
+        params.set('max_lng', String(activeBounds.max_lng))
       }
-    },
-    [q, tipo],
-  )
-
-  useEffect(() => {
-    void load()
-  }, [load])
+      const qs = params.toString()
+      const data = await api<Pivot[]>(`/pivots${qs ? `?${qs}` : ''}`)
+      setPivots(data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao carregar pinos')
+    }
+  }, [])
 
   async function downloadOffline() {
     setBusy(true)
@@ -75,13 +79,20 @@ export function Dashboard() {
     }
   }
 
+  function handlePlaceRequest(coords: PlaceCoords) {
+    setPlaceCoords(coords)
+    setCreateOpen(true)
+  }
+
   return (
     <div className="h-[calc(100vh-56px)] md:h-screen flex flex-col">
       <div className="p-3 sm:p-4 border-b border-forest-700 bg-forest-900/70 backdrop-blur space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <div>
             <h1 className="text-xl font-bold text-sand-400">Mapa</h1>
-            <p className="text-xs text-stone-400">Sua posição e pinos na área visível</p>
+            <p className="text-xs text-stone-400">
+              Sua posição e pinos na área visível · Duplo clique no mapa para criar um pino
+            </p>
           </div>
           <div className="flex-1 flex flex-col sm:flex-row gap-2">
             <input
@@ -125,9 +136,22 @@ export function Dashboard() {
           pivots={pivots}
           onSelect={setSelected}
           onBoundsChange={(b) => void load(b)}
+          onPlaceRequest={handlePlaceRequest}
           height="100%"
         />
       </div>
+
+      <CreatePivotModal
+        open={createOpen}
+        onClose={() => {
+          setCreateOpen(false)
+          setPlaceCoords(null)
+        }}
+        initialCoords={placeCoords}
+        onCreated={() => {
+          void load()
+        }}
+      />
 
       <PivotDetail
         pivot={selected}
