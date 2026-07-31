@@ -1,8 +1,24 @@
-import os
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def normalize_database_url(url: str) -> str:
+    """Force async drivers — hosts often give postgresql:// (defaults to psycopg2)."""
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url.removeprefix("postgres://")
+    replacements = (
+        ("postgresql+psycopg2://", "postgresql+asyncpg://"),
+        ("postgresql+psycopg://", "postgresql+asyncpg://"),
+        ("postgresql://", "postgresql+asyncpg://"),
+        ("sqlite://", "sqlite+aiosqlite://"),
+    )
+    for old, new in replacements:
+        if url.startswith(old):
+            return new + url.removeprefix(old)
+    return url
 
 
 class Settings(BaseSettings):
@@ -16,6 +32,13 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:8080"
     backend_port: int = 8000
     rate_limit: str = "20/minute"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalize_database_url(cls, v: object) -> object:
+        if isinstance(v, str):
+            return normalize_database_url(v)
+        return v
 
     @property
     def cors_origins_list(self) -> list[str]:
