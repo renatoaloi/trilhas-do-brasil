@@ -68,6 +68,7 @@ class VehicleModel(Base):
     modelo: Mapped[str] = mapped_column(String(100), nullable=False)
     descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
     tipo: Mapped[str] = mapped_column(String(50), default=TipoVeiculo.OUTROS.value, nullable=False)
+    foto: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

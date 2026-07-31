@@ -21,6 +21,7 @@ export type Vehicle = {
   marca: string
   modelo: string
   descricao?: string | null
+  foto?: string | null
   tipo: string
   created_at?: string
 }

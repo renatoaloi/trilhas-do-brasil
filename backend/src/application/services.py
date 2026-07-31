@@ -208,6 +208,13 @@ class VehicleService:
         await self.db.delete(vehicle)
         await self.db.flush()
 
+    async def set_foto(self, user: UserModel, vehicle_id: uuid.UUID, path: str) -> VehicleModel:
+        vehicle = await self._get_owned(user, vehicle_id)
+        vehicle.foto = path
+        await self.db.flush()
+        await self.db.refresh(vehicle)
+        return vehicle
+
     async def _get_owned(self, user: UserModel, vehicle_id: uuid.UUID) -> VehicleModel:
         result = await self.db.execute(select(VehicleModel).where(VehicleModel.id == vehicle_id))
         vehicle = result.scalar_one_or_none()

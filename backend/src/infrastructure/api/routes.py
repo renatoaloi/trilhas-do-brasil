@@ -128,6 +128,17 @@ async def delete_veiculo(
     await VehicleService(db).delete(user, vehicle_id)
 
 
+@protected.post("/veiculos/{vehicle_id}/foto", response_model=VehicleResponse, tags=["veiculos"])
+async def upload_vehicle_foto(
+    vehicle_id: UUID,
+    file: UploadFile = File(...),
+    user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    path = await save_upload(vehicle_id, file, "foto")
+    return await VehicleService(db).set_foto(user, vehicle_id, path)
+
+
 @protected.get("/pivots", response_model=list[PivotResponse], tags=["pivots"])
 async def list_pivots(
     q: Optional[str] = Query(default=None),
