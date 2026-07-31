@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { MapView, type RadiusOverlay } from '../components/MapView'
 import { CreatePivotModal, type PlaceCoords } from '../components/CreatePivotModal'
 import { PivotDetail } from '../components/PivotDetail'
@@ -35,6 +36,18 @@ export function Dashboard() {
   const boundsRef = useRef<Bounds | undefined>(undefined)
   const filtersRef = useRef({ q: '', tipo: '' })
   filtersRef.current = { q, tipo }
+
+  const location = useLocation()
+  const [viewCenter, setViewCenter] = useState<{lat: number; lng: number} | null>(null)
+  const lastCenterKey = useRef('')
+
+  useEffect(() => {
+    const navCenter = (location.state as any)?.center
+    if (navCenter && location.key !== lastCenterKey.current) {
+      lastCenterKey.current = location.key
+      setViewCenter(navCenter)
+    }
+  }, [location.state, location.key])
 
   const load = useCallback(async (bounds?: Bounds) => {
     if (bounds) boundsRef.current = bounds
@@ -208,6 +221,7 @@ export function Dashboard() {
           onBoundsChange={(b) => void load(b)}
           onPlaceRequest={offlineSelecting ? undefined : handlePlaceRequest}
           radiusOverlay={radiusOverlay}
+          center={viewCenter}
           height="100%"
         />
       </div>
